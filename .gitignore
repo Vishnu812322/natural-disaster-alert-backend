@@ -1,0 +1,66 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Firebase credentials
+*-service-account.json
+google-services.json
+
+# Local configuration
+application-local.properties
+application-secret.properties
+
+# Uploaded/generated files
+uploads/
+temp/
+tmp/
+
+# Build files
+*.class
+
+# Frontend dependencies
+frontend/node_modules/
+node_modules/
+
+# Frontend build
+frontend/dist/
+frontend/build/
+
+# Backend build
+backend/target/
+
+# Environment files
+.env
+.env.*
+
+# Android / Gradle
+.gradle/
+**/.gradle/
+build/
+**/build/
+local.properties
+
+# Android generated files
+*.apk
+*.aab

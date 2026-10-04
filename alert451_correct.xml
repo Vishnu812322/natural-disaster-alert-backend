@@ -1,0 +1,45 @@
+<cap:alert xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+<cap:identifier>IN-1791120568481029_46</cap:identifier>
+<cap:sender>IMD-Mumbai</cap:sender>
+<cap:sent>2026-10-04T18:58:49+05:30</cap:sent>
+<cap:status>Actual</cap:status>
+<cap:msgType>Alert</cap:msgType>
+<cap:scope>Public</cap:scope>
+<cap:restriction/>
+<cap:addresses/>
+<cap:note/>
+<cap:incidents/>
+<cap:info>
+<cap:language>en-IN</cap:language>
+<cap:category>Met</cap:category>
+<cap:event>Light Thunderstorm with surface wind</cap:event>
+<cap:urgency>Expected</cap:urgency>
+<cap:severity>Moderate</cap:severity>
+<cap:certainty>Likely</cap:certainty>
+<cap:audience>1</cap:audience>
+<cap:effective>2026-10-04T19:00:00+05:30</cap:effective>
+<cap:onset>2026-10-04T18:59:28+05:30</cap:onset>
+<cap:expires>2026-10-04T22:00:00+05:30</cap:expires>
+<cap:headline>Thunderstorm accompanied with lightning, Light spells of rain and gusty winds reaching 30-40 kmph very likely to occur at isolated places over Kolhapur, Sindhudurg in next 3 hours.</cap:headline>
+<cap:description/>
+<cap:instruction>Please follow SDMA guidelines.</cap:instruction>
+<cap:contact/>
+<cap:parameter>
+<cap:valueName>Polygon URL</cap:valueName>
+<cap:value>https://sachet.ndma.gov.in/cap_public_website/FetchPolygonXMLFile?identifier=1791120568481029</cap:value>
+</cap:parameter>
+<cap:area>
+<cap:areaDesc>Kolhapur, Sindhudurg districts of Maharashtra</cap:areaDesc>
+<cap:geocode>
+<cap:valueName>LGD District Code</cap:valueName>
+<cap:value>480</cap:value>
+</cap:geocode>
+<cap:geocode>
+<cap:valueName>LGD District Code</cap:valueName>
+<cap:value>495</cap:value>
+</cap:geocode>
+<cap:altitude>0</cap:altitude>
+<cap:ceiling>0</cap:ceiling>
+</cap:area>
+</cap:info>
+</cap:alert>
