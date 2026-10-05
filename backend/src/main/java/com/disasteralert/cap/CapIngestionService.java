@@ -3,50 +3,27 @@ package com.disasteralert.cap;
 
 
 import java.io.ByteArrayInputStream;
-
 import java.net.URI;
-
 import java.net.URLEncoder;
-
 import java.net.http.HttpClient;
-
 import java.net.http.HttpRequest;
-
 import java.net.http.HttpResponse;
-
 import java.nio.charset.StandardCharsets;
-
 import java.time.Duration;
-
 import java.time.Instant;
-
 import java.util.List;
-
 import java.util.Locale;
-
-
-
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
-
-
 import org.springframework.stereotype.Service;
-
 import org.w3c.dom.Document;
-
 import org.w3c.dom.NodeList;
 
-
-
 import com.disasteralert.disaster.DisasterAlert;
-
 import com.disasteralert.disaster.DisasterAlertRepository;
-
 import com.disasteralert.notification.NotificationService;
-
 import com.disasteralert.sources.FeedSource;
-
 import com.disasteralert.sources.FeedSourceRepository;
 
 
@@ -227,11 +204,27 @@ public class CapIngestionService {
 
         String identifier = extractIdentifier(item);
 
+System.out.println("========================================");
+System.out.println("SACHET RSS ITEM");
+System.out.println("GUID       = " + item.guid());
+System.out.println("LINK       = " + item.link());
+System.out.println("TITLE      = " + item.title());
+System.out.println("IDENTIFIER = " + identifier);
+System.out.println("========================================");
+
+if (identifier == null || identifier.isBlank()) {
+    System.out.println("SACHET SKIPPED: identifier could not be extracted.");
+    return false;
+}
+
         if (identifier == null || identifier.isBlank()) return false;
 
 
 
         String capUrl = buildCapUrl(item.link(), identifier);
+        System.out.println(
+        "SACHET CAP URL = " + capUrl
+);
 
 
 
@@ -261,7 +254,18 @@ public class CapIngestionService {
 
 
 
-            if (response.statusCode() < 200 || response.statusCode() >= 300) return false;
+            if (response.statusCode() < 200
+        || response.statusCode() >= 300) {
+
+    System.out.println(
+            "SACHET CAP DOWNLOAD FAILED: HTTP "
+                    + response.statusCode()
+                    + " URL="
+                    + capUrl
+    );
+
+    return false;
+}
 
 
 
