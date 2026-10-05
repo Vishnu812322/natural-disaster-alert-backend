@@ -1,5 +1,6 @@
 CREATE DATABASE IF NOT EXISTS disaster_alert CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE disaster_alert;
+USE defaultdb;
 
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT NOT NULL AUTO_INCREMENT,

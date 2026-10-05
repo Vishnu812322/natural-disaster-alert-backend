@@ -1,6 +1,9 @@
 package com.disasteralert.fcm;
 
+import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -84,9 +87,9 @@ public class FirebaseMessagingService {
 
             String messageId = messaging.send(message);
 
-            System.out.println(
-                    "FCM TEST SUCCESS: " + messageId
-            );
+            System.out.println("========================================");
+            System.out.println("FCM TEST SUCCESS: " + messageId);
+            System.out.println("========================================");
 
             return new SendResult(
                     true,
@@ -233,6 +236,7 @@ public class FirebaseMessagingService {
              * MyFirebaseMessagingService.onMessageReceived()
              * and creates the visible notification itself.
              */
+
             Message message = Message.builder()
                     .setToken(device.getFcmToken())
                     .putAllData(data)
@@ -332,6 +336,18 @@ public class FirebaseMessagingService {
         }
     }
 
+    /**
+     * Initializes Firebase using the following priority:
+     *
+     * 1. FIREBASE_SERVICE_ACCOUNT_BASE64
+     *    Used on Render/production.
+     *
+     * 2. GOOGLE_APPLICATION_CREDENTIALS
+     *    Used locally with the Firebase JSON file.
+     *
+     * 3. Google Application Default Credentials
+     *    Final fallback.
+     */
     private FirebaseMessaging getMessaging()
             throws IOException {
 
@@ -339,16 +355,94 @@ public class FirebaseMessagingService {
 
         if (FirebaseApp.getApps().isEmpty()) {
 
+            GoogleCredentials credentials;
+
+            String firebaseBase64 =
+                    System.getenv("FIREBASE_SERVICE_ACCOUNT_BASE64");
+
+            String credentialsPath =
+                    System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
+
+            /*
+             * -------------------------------------------------
+             * OPTION 1: Render / Production
+             * -------------------------------------------------
+             */
+            if (firebaseBase64 != null
+                    && !firebaseBase64.isBlank()) {
+
+                System.out.println(
+                        "Loading Firebase credentials from "
+                                + "FIREBASE_SERVICE_ACCOUNT_BASE64"
+                );
+
+                try {
+
+                    byte[] decoded =
+                            Base64.getDecoder()
+                                    .decode(firebaseBase64);
+
+                    credentials =
+                            GoogleCredentials.fromStream(
+                                    new ByteArrayInputStream(decoded)
+                            );
+
+                } catch (IllegalArgumentException ex) {
+
+                    System.err.println(
+                            "Invalid FIREBASE_SERVICE_ACCOUNT_BASE64"
+                    );
+
+                    throw new IOException(
+                            "Invalid Firebase Base64 credentials.",
+                            ex
+                    );
+                }
+            }
+
+            /*
+             * -------------------------------------------------
+             * OPTION 2: Local PC
+             * -------------------------------------------------
+             */
+            else if (credentialsPath != null
+                    && !credentialsPath.isBlank()) {
+
+                System.out.println(
+                        "Loading Firebase credentials from: "
+                                + credentialsPath
+                );
+
+                credentials =
+                        GoogleCredentials.fromStream(
+                                new FileInputStream(credentialsPath)
+                        );
+            }
+
+            /*
+             * -------------------------------------------------
+             * OPTION 3: Application Default Credentials
+             * -------------------------------------------------
+             */
+            else {
+
+                System.out.println(
+                        "Loading Firebase credentials using "
+                                + "Application Default Credentials"
+                );
+
+                credentials =
+                        GoogleCredentials.getApplicationDefault();
+            }
+
             FirebaseOptions options =
                     FirebaseOptions.builder()
-                            .setCredentials(
-                                    GoogleCredentials
-                                            .getApplicationDefault()
-                            )
+                            .setCredentials(credentials)
                             .setProjectId(projectId)
                             .build();
 
-            app = FirebaseApp.initializeApp(options);
+            app =
+                    FirebaseApp.initializeApp(options);
 
             System.out.println(
                     "Firebase initialized with project: "
