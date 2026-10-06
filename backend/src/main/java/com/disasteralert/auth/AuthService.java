@@ -1,7 +1,7 @@
 package com.disasteralert.auth;
 
+import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,23 +18,20 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final EmailOtpService emailOtpService;
-
-    private final ConcurrentHashMap<String, String> otps =
-            new ConcurrentHashMap<>();
-
-    private final ConcurrentHashMap<String, Long> otpExpiry =
-            new ConcurrentHashMap<>();
+    private final OtpVerificationRepository otpRepository;
 
     public AuthService(
             UserRepository users,
             PasswordEncoder encoder,
             JwtService jwt,
-            EmailOtpService emailOtpService
+            EmailOtpService emailOtpService,
+            OtpVerificationRepository otpRepository
     ) {
         this.users = users;
         this.encoder = encoder;
         this.jwt = jwt;
         this.emailOtpService = emailOtpService;
+        this.otpRepository = otpRepository;
     }
 
     // =========================================================
@@ -72,10 +69,10 @@ public class AuthService {
         // Generate OTP
         String otp = generateOtp();
 
-        // Save OTP for 10 minutes
+        // Save OTP in MySQL
         saveOtp(req.email(), otp);
 
-        // Send OTP through SMTP
+        // Send OTP through Brevo
         emailOtpService.sendOtp(
                 req.email(),
                 otp,
@@ -110,10 +107,10 @@ public class AuthService {
         // Generate OTP
         String otp = generateOtp();
 
-        // Save OTP
+        // Save OTP in MySQL
         saveOtp(req.email(), otp);
 
-        // Send OTP through SMTP
+        // Send OTP through Brevo
         emailOtpService.sendOtp(
                 req.email(),
                 otp,
@@ -190,7 +187,7 @@ public class AuthService {
     }
 
     // =========================================================
-    // SAVE OTP
+    // SAVE OTP TO MYSQL
     // =========================================================
 
     private void saveOtp(
@@ -198,14 +195,26 @@ public class AuthService {
             String otp
     ) {
 
-        otps.put(email, otp);
+        // Remove previous OTPs for this email
+        otpRepository
+                .findTopByEmailOrderByCreatedAtDesc(email)
+                .ifPresent(otpRepository::delete);
 
-        // OTP expires after 10 minutes
-        otpExpiry.put(
-                email,
-                System.currentTimeMillis()
-                        + (10 * 60 * 1000)
+        OtpVerification verification =
+                new OtpVerification();
+
+        verification.setEmail(email);
+        verification.setOtp(otp);
+
+        verification.setCreatedAt(
+                LocalDateTime.now()
         );
+
+        verification.setExpiresAt(
+                LocalDateTime.now().plusMinutes(10)
+        );
+
+        otpRepository.save(verification);
     }
 
     // =========================================================
@@ -217,22 +226,20 @@ public class AuthService {
             String otp
     ) {
 
-        String storedOtp = otps.get(email);
-
-        Long expiry = otpExpiry.get(email);
-
-        if (storedOtp == null || expiry == null) {
-
-            throw new RuntimeException(
-                    "OTP not found. Please request a new OTP."
-            );
-        }
+        OtpVerification verification =
+                otpRepository
+                        .findTopByEmailOrderByCreatedAtDesc(email)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "OTP not found. Please request a new OTP."
+                                )
+                        );
 
         // Check expiration
-        if (System.currentTimeMillis() > expiry) {
+        if (LocalDateTime.now()
+                .isAfter(verification.getExpiresAt())) {
 
-            otps.remove(email);
-            otpExpiry.remove(email);
+            otpRepository.delete(verification);
 
             throw new RuntimeException(
                     "OTP expired. Please request a new OTP."
@@ -240,7 +247,7 @@ public class AuthService {
         }
 
         // Check OTP
-        if (!storedOtp.equals(otp)) {
+        if (!verification.getOtp().equals(otp)) {
 
             throw new RuntimeException(
                     "Invalid OTP"
@@ -248,7 +255,6 @@ public class AuthService {
         }
 
         // OTP can only be used once
-        otps.remove(email);
-        otpExpiry.remove(email);
+        otpRepository.delete(verification);
     }
 }
