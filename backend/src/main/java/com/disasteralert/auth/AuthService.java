@@ -17,75 +17,73 @@ public class AuthService {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final EmailOtpService emailOtpService;
 
     private final ConcurrentHashMap<String, String> otps =
+            new ConcurrentHashMap<>();
+
+    private final ConcurrentHashMap<String, Long> otpExpiry =
             new ConcurrentHashMap<>();
 
     public AuthService(
             UserRepository users,
             PasswordEncoder encoder,
-            JwtService jwt) {
-
+            JwtService jwt,
+            EmailOtpService emailOtpService
+    ) {
         this.users = users;
         this.encoder = encoder;
         this.jwt = jwt;
+        this.emailOtpService = emailOtpService;
     }
 
     // =========================================================
-    // USER REGISTRATION
+    // REGISTER
     // =========================================================
 
     public String register(RegisterRequest req) {
 
-        // Check email
         if (users.findByEmail(req.email()).isPresent()) {
             throw new RuntimeException("Email already registered");
         }
 
-        // Check phone
         if (users.findByPhone(req.phone()).isPresent()) {
             throw new RuntimeException("Phone number already registered");
         }
 
-        // Create new user
         User user = new User();
 
         user.setName(req.name());
         user.setEmail(req.email());
         user.setPhone(req.phone());
 
-        // Never store the plain password
         user.setPasswordHash(
                 encoder.encode(req.password())
         );
 
-        // Normal Android user
         user.setRole("USER");
-
-        // Account enabled
         user.setEnabled(true);
 
-        // Location will be added after Android permission
         user.setLatitude(null);
         user.setLongitude(null);
 
         users.save(user);
 
-        // Generate registration OTP
+        // Generate OTP
         String otp = generateOtp();
 
-        otps.put(req.email(), otp);
+        // Save OTP for 10 minutes
+        saveOtp(req.email(), otp);
 
-        System.out.println(
-                "[DEVELOPMENT OTP] Registration: "
-                        + req.email()
-                        + " => "
-                        + otp
+        // Send OTP through SMTP
+        emailOtpService.sendOtp(
+                req.email(),
+                otp,
+                "new account registration"
         );
 
         return "OTP_SENT";
     }
-
 
     // =========================================================
     // LOGIN
@@ -93,32 +91,37 @@ public class AuthService {
 
     public String login(LoginRequest req) {
 
-        User u = users.findByEmail(req.email())
+        User user = users.findByEmail(req.email())
                 .orElseThrow(() ->
-                        new RuntimeException("Invalid credentials"));
+                        new RuntimeException("Invalid credentials")
+                );
 
-        if (!u.isEnabled()
-                || !encoder.matches(
-                        req.password(),
-                        u.getPasswordHash())) {
+        if (!user.isEnabled()) {
+            throw new RuntimeException("Account is disabled");
+        }
 
+        if (!encoder.matches(
+                req.password(),
+                user.getPasswordHash()
+        )) {
             throw new RuntimeException("Invalid credentials");
         }
 
+        // Generate OTP
         String otp = generateOtp();
 
-        otps.put(req.email(), otp);
+        // Save OTP
+        saveOtp(req.email(), otp);
 
-        System.out.println(
-                "[DEVELOPMENT OTP] Login: "
-                        + req.email()
-                        + " => "
-                        + otp
+        // Send OTP through SMTP
+        emailOtpService.sendOtp(
+                req.email(),
+                otp,
+                "login"
         );
 
         return "OTP_SENT";
     }
-
 
     // =========================================================
     // VERIFY OTP
@@ -126,61 +129,55 @@ public class AuthService {
 
     public String verify(VerifyOtpRequest req) {
 
-        String expected = otps.get(req.email());
+        validateOtp(
+                req.email(),
+                req.otp()
+        );
 
-        if (expected == null
-                || !expected.equals(req.otp())) {
-
-            throw new RuntimeException("Invalid OTP");
-        }
-
-        // OTP can only be used once
-        otps.remove(req.email());
-
-        User u = users.findByEmail(req.email())
+        User user = users.findByEmail(req.email())
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new RuntimeException("User not found")
+                );
 
         return jwt.generate(
-                u.getEmail(),
-                u.getRole()
+                user.getEmail(),
+                user.getRole()
         );
     }
 
-
+    // =========================================================
+    // VERIFY OTP + USER INFORMATION
+    // =========================================================
 
     public Map<String, String> verifyWithUserInfo(
-        VerifyOtpRequest req) {
+            VerifyOtpRequest req
+    ) {
 
-    String expected = otps.get(req.email());
+        validateOtp(
+                req.email(),
+                req.otp()
+        );
 
-    if (expected == null
-            || !expected.equals(req.otp())) {
+        User user = users.findByEmail(req.email())
+                .orElseThrow(() ->
+                        new RuntimeException("User not found")
+                );
 
-        throw new RuntimeException("Invalid OTP");
+        String token = jwt.generate(
+                user.getEmail(),
+                user.getRole()
+        );
+
+        return Map.of(
+                "token", token,
+                "userId", String.valueOf(user.getId()),
+                "name", user.getName(),
+                "email", user.getEmail()
+        );
     }
 
-    otps.remove(req.email());
-
-    User u = users.findByEmail(req.email())
-            .orElseThrow(() ->
-                    new RuntimeException("User not found"));
-
-    String token = jwt.generate(
-            u.getEmail(),
-            u.getRole()
-    );
-
-    return Map.of(
-            "token", token,
-            "userId", String.valueOf(u.getId()),
-            "name", u.getName(),
-            "email", u.getEmail()
-    );
-}
-
     // =========================================================
-    // OTP GENERATOR
+    // GENERATE OTP
     // =========================================================
 
     private String generateOtp() {
@@ -190,5 +187,68 @@ public class AuthService {
                 ThreadLocalRandom.current()
                         .nextInt(0, 1_000_000)
         );
+    }
+
+    // =========================================================
+    // SAVE OTP
+    // =========================================================
+
+    private void saveOtp(
+            String email,
+            String otp
+    ) {
+
+        otps.put(email, otp);
+
+        // OTP expires after 10 minutes
+        otpExpiry.put(
+                email,
+                System.currentTimeMillis()
+                        + (10 * 60 * 1000)
+        );
+    }
+
+    // =========================================================
+    // VALIDATE OTP
+    // =========================================================
+
+    private void validateOtp(
+            String email,
+            String otp
+    ) {
+
+        String storedOtp = otps.get(email);
+
+        Long expiry = otpExpiry.get(email);
+
+        if (storedOtp == null || expiry == null) {
+
+            throw new RuntimeException(
+                    "OTP not found. Please request a new OTP."
+            );
+        }
+
+        // Check expiration
+        if (System.currentTimeMillis() > expiry) {
+
+            otps.remove(email);
+            otpExpiry.remove(email);
+
+            throw new RuntimeException(
+                    "OTP expired. Please request a new OTP."
+            );
+        }
+
+        // Check OTP
+        if (!storedOtp.equals(otp)) {
+
+            throw new RuntimeException(
+                    "Invalid OTP"
+            );
+        }
+
+        // OTP can only be used once
+        otps.remove(email);
+        otpExpiry.remove(email);
     }
 }
